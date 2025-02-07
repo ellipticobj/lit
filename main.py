@@ -2,6 +2,7 @@ import sys
 import os
 import zlib
 import hashlib
+import shutil
 
 def main():
     args = sys.argv[1:]
@@ -44,6 +45,9 @@ def init():
         if resp.lower() != 'y':
             print("n")
             return
+        else:
+            shutil.rmtree(".lit")
+            print("deleted existing lit repository")
 
     os.mkdir(".lit")
     os.mkdir(".lit/objects")
@@ -80,8 +84,10 @@ def catfile(args):
 def hashobject(args):
     # TODO: implement type declaration
     type = 'blob'
+    writefile = False
 
     if args[0] == '-w':
+        writefile = True
         filename = args[1]
     else:
         filename = args[0]
@@ -93,7 +99,9 @@ def hashobject(args):
         return
 
     with open(filename, "r") as file:
-        compressed = zlib.compress(f"{type} {filesize}\x00{file.read()}".encode())
+        uncompressed = f"{type} {filesize}\x00{file.read()}"
+
+    compressed = zlib.compress(uncompressed.encode())
 
     hash = hashlib.sha1(compressed).hexdigest()
     dir, file = hash[:2], hash[2:]
@@ -101,8 +109,9 @@ def hashobject(args):
     if not os.path.exists(f".lit/objects/{dir}"):
         os.mkdir(f".lit/objects/{dir}")
 
-    with open(f".lit/objects/{dir}/{file}", "wb") as file:
-        file.write(compressed)
+    if writefile:
+        with open(f".lit/objects/{dir}/{file}", "wb") as file:
+            file.write(compressed)
 
     print(hash)
 
