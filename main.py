@@ -4,6 +4,18 @@ import zlib
 import hashlib
 import shutil
 
+def parseargs(args):
+    flags = []
+    kwargs = []
+
+    for arg in args:
+        if arg.startswith('-'):
+            flags.append(arg)
+        elif arg.startswith('--'):
+            kwargs.append(arg)
+
+    return flags, kwargs
+
 def main():
     args = sys.argv[1:]
 
@@ -33,6 +45,13 @@ def main():
                 print("too many arguments for command `lit hashobject`")
 
             return hashobject(args)
+
+        case 'lstree':
+            args = args[1:]
+            if len(args) != 1:
+                print("command requires one argument\nusage: lit lstree <hash>")
+
+            return lstree(args)
 
         case other:
             print(f"unrecognized command {other}")
@@ -67,30 +86,35 @@ def decompfile(compressed):
     return type, size, content.decode()
 
 def catfile(args):
+    flags, args = parseargs(args)
+
     if len(args) > 2:
         print("too many arguments for command `lit catfile`")
         return
+
+    if len(args) < 2:
+        print("command requires two arguments\nusage: lit catfile <type> <hash>")
+        return
+
+    type = args[0]
+    hash = args[1]
+
     # TODO: add support for other object types
-    if args[0] == "blob" or args[0] == "-p":
-        # read a blob
+    if "-p" in flags or type == "blob":
         hash = args[1]
         with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
-            type, size, content = decompfile(file.read())
+            conttype, size, content = decompfile(file.read())
             print(content)
 
     else:
         print(f"unrecognized object type {args[1]}\nthis is NOT a full implementation. only blobs are supported for this command.")
 
 def hashobject(args):
-    # TODO: implement type declaration
-    type = 'blob'
-    writefile = False
+    flags, args = parseargs(args)
 
-    if args[0] == '-w':
-        writefile = True
-        filename = args[1]
-    else:
-        filename = args[0]
+    type = 'blob'
+
+    filename = args[1]
 
     try:
         filesize = os.path.getsize(filename)
@@ -109,11 +133,33 @@ def hashobject(args):
     if not os.path.exists(f".lit/objects/{dir}"):
         os.mkdir(f".lit/objects/{dir}")
 
-    if writefile:
+    if "-w" in flags:
         with open(f".lit/objects/{dir}/{file}", "wb") as file:
             file.write(compressed)
 
     print(hash)
+
+def lstree(hash):
+    try:
+        with open(f".lit/objects/{hash[:2]}/{hash[2:]}", "rb") as file:
+            type, size, content = decompfile(file.read())
+            if type != "tree";
+                print(f"object {hash} is not a tree")
+                idx = 0
+                while idx < len(content):
+                    modeend = content.find(b' ', idx)
+                    mode = content[idx:modeend].decode()
+
+                    nameend = content.find(b'\x00', modeend)
+                    name = content[modeend+1:nameend].decode()
+
+                    conthash = content[nameend+1:nameend+21].hex()
+
+                    print(f"{mode} {conthash} {name}")
+
+                    idx = nameend + 21
+    except FileNotFoundError:
+        print(f"tree {hash} not found")
 
 if __name__ == "__main__":
     main()
