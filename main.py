@@ -194,31 +194,31 @@ def lstree(args):
     try:
         with open(f".lit/objects/{hash[:2]}/{hash[2:]}", "rb") as file:
             type, size, content = decompfile(file.read())
+            content = content.decode()
             if type != "tree":
                 print(f"object {hash} is not a tree")
                 return []
-            
+
             if "--name-only" in flags:
                 while content:
-                    header, content = content.split(b"\x00", maxsplit=1)
-                    _, name = header.split(b' ')
-                    content = content[20:]
-                    res.append(name.decode())
+                    header, content = content.split("\x00", maxsplit=1)
+                    _, name = header.split(' ', maxsplit=1)
+                    content = content[40:]
+                    res.append(name)
 
             else:
                 while content:
-                    modeend = content.find(b" ")
-                    mode = content[:modeend]
-                    content = content[modeend+1:]
-                    
+                    mode, content = content.split(" ", maxsplit=1)
+
                     #TODO: find some way to fix this
-                    name, content = content.split(b"\x00", maxsplit=1)
-                    
+                    print(content)
+                    name, content = content.split("\x00", maxsplit=1)
+
                     shahash = content[:40]
                     content = content[40:]
 
-                    print(f"mode: {mode.decode()}\nname: {name.decode()}\nhash: {shahash.hex()}")
-                    res.append(f"{mode.decode()} {name.decode()} {shahash.hex()}")
+                    print(f"mode: {mode}\nname: {name}\nhash: {shahash}")
+                    res.append(f"{mode} {name} {shahash}")
 
     except FileNotFoundError:
         print(f"tree {hash} not found")
