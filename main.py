@@ -109,31 +109,64 @@ def init():
 
 
 def catfile(args):
+    recognizedflags = ["-p"]
     flags, args = parseargs(args)
-
-    # TODO: if there are two args, there shouldnt be any flags, and args should be: type, hash
-    # else: there should be a flag and they should be: -p, hash
-
     # TODO: add support for other object types
-    if "-p" in flags:
-        hash = args[1]
-        with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
-            conttype, size, content = decompfile(file.read())
-            print(content.strip())
-            return
+    if not set(flags).issubset(recognizedflags):
+        print("unrecognized flag\nusage: lit catfile [-p | <type>] <hash>")
+        return
 
-    elif type == "blob":
-        hash = args[1]
-        with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
-            conttype, size, content = decompfile(file.read())
-            if conttype != "blob":
-                print(f"object {hash} is not a blob")
+    if len(args) <= 1:
+        print("too little arguments\nusage: lit catfile [-p | <type>] <hash>")
+        return
+    elif 2 < len(args):
+        print("too many arguments\nusage: lit catfile [-p | <type>] <hash>")
+        return
+
+
+    type = args[0] if len(args) == 2 else None
+    hash = args[-1] if len(args) == 2 else args[-1]
+
+    if len(hash) != 40:
+        print(f"invalid hash {hash}\nusage: lit catfile [-p | <type>] <hash>")
+        return
+
+    if flags:
+        if len(args) != 1:
+            print("too many arguments\nusage: lit catfile [-p | <type>] <hash>")
+            return
+        if '-p' in flags:
+            try:
+                with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
+                    conttype, size, content = decompfile(file.read())
+                    print(content.strip())
+                    return
+            except FileNotFoundError:
+                print(f"object {hash} not found")
                 return
-            print(content.strip())
+
+    elif type:
+        try:
+            with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
+                conttype, size, content = decompfile(file.read())
+                if conttype != type:
+                    print(f"object {hash} is not a blob")
+                    return
+                print(content.strip())
+                return
+        except FileNotFoundError:
+            print(f"object {hash} not found")
             return
 
     else:
-        print(f"unrecognized object type {args[1]}\nthis is NOT a full implementation. only blobs are supported for this command.")
+        try:
+            with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
+                conttype, size, content = decompfile(file.read())
+                print(content.strip())
+                return
+        except FileNotFoundError:
+            print(f"object {hash} not found")
+            return
 
 def hashobject(args):
     flags, args = parseargs(args)
@@ -153,14 +186,16 @@ def hashobject(args):
     else:
         hash = hashfile(filename, filesize, write=False, type=type)
 
-    print(hash)
+    return hash
 
 def lstree(args):
+    # TODO: change print to return
     flags, args = parseargs(args)
+
     hash = flags[0]
 
     if len(flags) != 40:
-        print("invalid hash")
+        print("invalid hash\nusage: lit lstree <hash>")
         return
 
     try:
@@ -168,27 +203,30 @@ def lstree(args):
             type, size, content = decompfile(file.read())
             if type != "tree":
                 print(f"object {hash} is not a tree")
+
+            if "--name-only" in flags:
                 idx = 0
+                while idx < len(content):
+                    nameend = content.find(b'\x00', idx)
+                    name = content[idx:nameend].decode()
 
-                if "--name-only" in flags:
-                    while idx < len(content):
-                        nameend = content.find(b'\x00', idx)
-                        name = content[idx:nameend].decode()
-                        print(name)
-                        idx = nameend + 21
-                else:
-                    while idx < len(content):
-                        modeend = content.find(b' ', idx)
-                        mode = content[idx:modeend].decode()
+                    print(name)
 
-                        nameend = content.find(b'\x00', modeend)
-                        name = content[modeend+1:nameend].decode()
+                    idx = nameend + 21
+            else:
+                idx = 0
+                while idx < len(content):
+                    modeend = content.find(b' ', idx)
+                    mode = content[idx:modeend].decode()
 
-                        conthash = content[nameend+1:nameend+21].hex()
+                    nameend = content.find(b'\x00', modeend)
+                    name = content[modeend+1:nameend].decode()
 
-                        print(f"{mode} {conthash} {name}")
+                    conthash = content[nameend+1:nameend+21].hex()
 
-                        idx = nameend + 21
+                    print(f"{mode} {conthash} {name}")
+
+                    idx = nameend + 21
 
     except FileNotFoundError:
         print(f"tree {hash} not found")
@@ -200,7 +238,6 @@ def writetree(args):
     if os.path.isfile(path):
         return hashfile(path)
 
-    print(os.path.join(path, x))
     contents = sorted(
         os.listdir(path),
         key=lambda x: x if os.path.isfile(os.path.join(path, x)) else f"{x}/"
@@ -214,13 +251,13 @@ def writetree(args):
         fullpath = os.path.join(path, item)
 
         if os.path.isfile(fullpath):
-            hash = hashfile(fullpath)
-            s += f"100644 {item}\x00{hash}".encode()
+            ithash = hashfile(fullpath)
+            s += f"100644 {item}\x00{ithash}".encode()
         else:
             subtreehash = writetree([fullpath])
             s += f"40000 {item}\x00{subtreehash}".encode()
 
-    s = f"tree {len(s)}\x00{s}".encode() + s
+    s = f"tree {len(s)}\x00{s}".encode()
     hash = hashlib.sha1(s).hexdigest()
 
     os.makedirs(f".lit/objects/{hash[:2]}", exist_ok=True)
