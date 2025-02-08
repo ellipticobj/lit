@@ -45,11 +45,15 @@ def main():
             print(writetree(args[1:]))
 
         case 'lstree':
+            if len(args) < 2:
+                print("too little arguments\nusage: lit lstree <hash>")
+                return
+
             if len(args) > 3:
                 print("too many arguments\nusage: lit lstree <hash>")
                 return
 
-            print(*lstree(args[1:]))
+            print(lstree(args[1:]))
 
         case other:
             print(f"unrecognized command {other}")
@@ -70,7 +74,7 @@ def hashfile(path, filesize=None, write=False, type="blob"):
     with open(path, "rb") as file:
         content = file.read()
         filesize = len(content) if not filesize else filesize
-        unhashed = f"{type} {filesize}\x00{content.decode()}".encode('utf-8')
+        unhashed = f"{type} {str(filesize)}\x00".encode() + content
 
     hash = hashlib.sha1(unhashed).hexdigest()
 
@@ -103,10 +107,10 @@ def init():
             print("n")
             return
 
-    os.makedirs(".lit/objects")
-    os.makedirs(".lit/refs")
+    os.makedirs(f"{os.getcwd()}/.lit/objects")
+    os.makedirs(f"{os.getcwd()}/.lit/refs")
 
-    with open(".lit/HEAD", "w") as file:
+    with open(f"{os.getcwd()}.lit/HEAD", "w") as file:
         file.write("ref: refs/heads/main\n")
 
     return "initialized a repository\ncurrent branch is main"
@@ -139,7 +143,7 @@ def catfile(args):
         if '-p' in flags:
             # TODO: add pretty print
             try:
-                _, _, content = decompfile(f".lit/objects/{hash[0:2]}/{hash[2:]}")
+                _, _, content = decompfile(f"{os.getcwd()}/.lit/objects/{hash[0:2]}/{hash[2:]}")
                 return content.decode().strip()
             except FileNotFoundError:
                 return f"object {hash} not found"
@@ -148,7 +152,7 @@ def catfile(args):
 
     elif objtype:
         try:
-            conttype, _, content = decompfile(f".lit/objects/{hash[0:2]}/{hash[2:]}")
+            conttype, _, content = decompfile(f"{os.getcwd()}/.lit/objects/{hash[0:2]}/{hash[2:]}")
             if conttype != objtype:
                 return f"object {hash} is not a blob"
             return content.decode().strip()
@@ -157,7 +161,7 @@ def catfile(args):
 
     else:
         try:
-            _, _, content = decompfile(f".lit/objects/{hash[0:2]}/{hash[2:]}")
+            _, _, content = decompfile(f"{os.getcwd()}/.lit/objects/{hash[0:2]}/{hash[2:]}")
             return content.decode().strip()
         except FileNotFoundError:
             return f"object {hash} not found"
@@ -175,9 +179,9 @@ def hashobject(args):
         return f"file {filename} not found"
 
     if "-w" in flags:
-        hash = hashfile(filename, filesize, write=True, type=type)
+        hash = hashfile(f"{os.getcwd()}/filename", filesize, write=True, type=type)
     else:
-        hash = hashfile(filename, filesize, write=False, type=type)
+        hash = hashfile(f"{os.getcwd()}/filename", filesize, write=False, type=type)
 
     return hash
 
@@ -191,8 +195,7 @@ def lstree(args):
         return f"hash shoould be 40 characters long but input is {len(hash)} characters only\nusage: lit lstree <hash>"
 
     try:
-        with open(f".lit/objects/{hash[:2]}/{hash[2:]}", "rb") as file:
-            print(file.read())
+        with open(f"{os.getcwd()}/.lit/objects/{hash[:2]}/{hash[2:]}", "rb") as file:
             type, size, content = decompfile(file.read())
             content = content.decode()[2:-2]
             if type != "tree":
@@ -209,7 +212,7 @@ def lstree(args):
                 while content:
                     mode, content = content.split(" ", maxsplit=1)
 
-                    name, content = content.split("\\x00", maxsplit=1)
+                    name, content = content.split("\x00", maxsplit=1)
 
                     shahash = content[:40]
                     content = content[40:]
@@ -223,7 +226,7 @@ def lstree(args):
 
 def writetree(args):
     flags, args = parseargs(args)
-    path = args[0] if args else "./"
+    path = f"{os.getcwd()}/{args[0]}" if args else f"{os.getcwd()}/"
 
     if os.path.isfile(path):
         return hashfile(path)
@@ -250,8 +253,8 @@ def writetree(args):
     s = f"tree {len(s)}\x00{s}".encode()
     hash = hashlib.sha1(s).hexdigest()
 
-    os.makedirs(f".lit/objects/{hash[:2]}", exist_ok=True)
-    with open(f".lit/objects/{hash[:2]}/{hash[2:]}", "wb") as file:
+    os.makedirs(f"{os.getcwd()}/.lit/objects/{hash[:2]}", exist_ok=True)
+    with open(f"{os.getcwd()}/.lit/objects/{hash[:2]}/{hash[2:]}", "wb") as file:
         file.write(zlib.compress(s))
 
     return hash
