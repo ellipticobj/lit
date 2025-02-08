@@ -70,7 +70,7 @@ def hashfile(path, filesize=None, write=False, type="blob"):
     with open(path, "rb") as file:
         content = file.read()
         filesize = len(content) if not filesize else filesize
-        unhashed = f"{type} {filesize}\x00{content}".encode('utf-8')
+        unhashed = f"{type} {filesize}\x00{content.decode()}".encode('utf-8')
 
     hash = hashlib.sha1(unhashed).hexdigest()
 
@@ -81,10 +81,12 @@ def hashfile(path, filesize=None, write=False, type="blob"):
 
     return hash
 
-def decompfile(compressed):
+def decompfile(path):
+    with open(path, "rb") as file:
+        compressed = file.read()
     decompressed = zlib.decompress(compressed)
     header, content = decompressed.split(b'\x00', 1)
-    type, size = header.decode().split(" ")
+    type, size = header.split(b" ")
     return type, size, content
 
 def init():
@@ -112,67 +114,53 @@ def init():
 def catfile(args):
     recognizedflags = ["-p"]
     flags, args = parseargs(args)
-    # TODO: add support for other object types
+
     if not set(flags).issubset(recognizedflags):
-        print("unrecognized flag\nusage: lit catfile [-p | <type>] <hash>")
-        return
+        return "unrecognized flag\nusage: lit catfile [-p | <type>] <hash>"
 
     if len(args) < 1:
-        print("too little arguments\nusage: lit catfile [-p | <type>] <hash>")
-        return
+        return "too little arguments\nusage: lit catfile [-p | <type>] <hash>"
     elif 2 < len(args):
-        print("too many arguments\nusage: lit catfile [-p | <type>] <hash>")
-        return
+        return "too many arguments\nusage: lit catfile [-p | <type>] <hash>"
 
-
-    type = args[0] if len(args) == 2 else None
+    objtype = args[0] if len(args) == 3 else "blob"
     hash = args[-1] if len(args) == 2 else args[-1]
 
-    if type not in ["blob", "tree", "commit"]:
-        print(f"unrecognized type {type}\nusage: lit catfile [-p | <type>] <hash>")
-        return
+    if objtype not in ["blob", "tree", "commit"]:
+        return f"unrecognized type {objtype}\nusage: lit catfile [-p | <type>] <hash>"
 
     if len(hash) != 40:
-        print(f"invalid hash {hash}\nusage: lit catfile [-p | <type>] <hash>")
-        return
+        return f"invalid hash {hash}\nusage: lit catfile [-p | <type>] <hash>"
 
     if flags:
         if len(args) != 1:
-            print("too many arguments\nusage: lit catfile [-p | <type>] <hash>")
-            return
+            return "too many arguments\nusage: lit catfile [-p | <type>] <hash>"
+
         if '-p' in flags:
             # TODO: add pretty print
             try:
-                with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
-                    conttype, size, content = decompfile(file.read())
-                    return content.decode().strip()
-            except FileNotFoundError:
-                print(f"object {hash} not found")
-                return
-        else:
-            print("unrecognized flag\nusage: lit catfile [-p | <type>] <hash>")
-            return
-
-    elif type:
-        try:
-            with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
-                conttype, size, content = decompfile(file.read())
-                if conttype != type:
-                    print(f"object {hash} is not a blob")
-                    return
+                _, _, content = decompfile(f".lit/objects/{hash[0:2]}/{hash[2:]}")
                 return content.decode().strip()
+            except FileNotFoundError:
+                return f"object {hash} not found"
+        else:
+            return "unrecognized flag\nusage: lit catfile [-p | <type>] <hash>"
+
+    elif objtype:
+        try:
+            conttype, _, content = decompfile(f".lit/objects/{hash[0:2]}/{hash[2:]}")
+            if conttype != objtype:
+                return f"object {hash} is not a blob"
+            return content.decode().strip()
         except FileNotFoundError:
-            print(f"object {hash} not found")
-            return
+            return f"object {hash} not found"
 
     else:
         try:
-            with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
-                conttype, size, content = decompfile(file.read())
-                return content.decode().strip()
+            _, _, content = decompfile(f".lit/objects/{hash[0:2]}/{hash[2:]}")
+            return content.decode().strip()
         except FileNotFoundError:
-            print(f"object {hash} not found")
-            return
+            return f"object {hash} not found"
 
 def hashobject(args):
     flags, args = parseargs(args)
@@ -184,8 +172,7 @@ def hashobject(args):
     try:
         filesize = os.path.getsize(filename)
     except FileNotFoundError:
-        print(f"file {filename} not found")
-        return
+        return f"file {filename} not found"
 
     if "-w" in flags:
         hash = hashfile(filename, filesize, write=True, type=type)
@@ -201,8 +188,7 @@ def lstree(args):
     res = []
 
     if len(hash) != 40:
-        print(f"hash shoould be 40 characters long but input is {len(hash)} characters only\nusage: lit lstree <hash>")
-        return []
+        return f"hash shoould be 40 characters long but input is {len(hash)} characters only\nusage: lit lstree <hash>"
 
     try:
         with open(f".lit/objects/{hash[:2]}/{hash[2:]}", "rb") as file:
@@ -210,8 +196,7 @@ def lstree(args):
             type, size, content = decompfile(file.read())
             content = content.decode()[2:-2]
             if type != "tree":
-                print(f"object {hash} is not a tree")
-                return []
+                return f"object {hash} is not a tree"
 
             if "--name-only" in flags:
                 while content:
@@ -233,7 +218,7 @@ def lstree(args):
                     res.append(f"{mode} {name} {shahash}")
 
     except FileNotFoundError:
-        print(f"tree {hash} not found")
+        return f"tree {hash} not found"
     return res
 
 def writetree(args):
