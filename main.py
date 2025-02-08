@@ -194,14 +194,14 @@ def lstree(args):
     try:
         with open(f".lit/objects/{hash[:2]}/{hash[2:]}", "rb") as file:
             type, size, content = decompfile(file.read())
-            content = content.decode()
+            content = content.decode()[2:-2]
             if type != "tree":
                 print(f"object {hash} is not a tree")
                 return []
 
             if "--name-only" in flags:
                 while content:
-                    header, content = content.split("\x00", maxsplit=1)
+                    header, content = content.split("\\x00", maxsplit=1)
                     _, name = header.split(' ', maxsplit=1)
                     content = content[40:]
                     res.append(name)
@@ -210,19 +210,17 @@ def lstree(args):
                 while content:
                     mode, content = content.split(" ", maxsplit=1)
 
-                    #TODO: find some way to fix this
-                    print(content)
-                    name, content = content.split("\x00", maxsplit=1)
+                    name, content = content.split("\\x00", maxsplit=1)
 
                     shahash = content[:40]
                     content = content[40:]
 
-                    print(f"mode: {mode}\nname: {name}\nhash: {shahash}")
+                    # print(f"mode: {mode}\nname: {name}\nhash: {shahash}")
                     res.append(f"{mode} {name} {shahash}")
 
     except FileNotFoundError:
         print(f"tree {hash} not found")
-    # return res
+    return res
 
 def writetree(args):
     flags, args = parseargs(args)
@@ -244,8 +242,8 @@ def writetree(args):
         fullpath = os.path.join(path, item)
 
         if os.path.isfile(fullpath):
-            ithash = hashfile(fullpath)
-            s += f"100644 {item}\x00{ithash}".encode()
+            itemhash = hashfile(fullpath)
+            s += f"100644 {item}\x00{itemhash}".encode()
         else:
             subtreehash = writetree([fullpath])
             s += f"40000 {item}\x00{subtreehash}".encode()
