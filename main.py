@@ -17,14 +17,14 @@ def main():
                 print("too many arguments for command `lit init`")
                 return
 
-            return init()
+            print(init())
 
         case 'catfile':
             if len(args) < 3:
                 print("command requires two arguments\nusage: lit catfile <type> <hash>")
                 return
 
-            return catfile(args[1:])
+            print(catfile(args[1:]))
 
         case 'hashobject':
             if len(args) < 2:
@@ -34,21 +34,20 @@ def main():
                 print("too many arguments for command `lit hashobject`")
                 return
 
-            return hashobject(args[1:])
+            print(hashobject(args[1:]))
 
         case 'writetree':
-            return writetree(args[1:])
+            print(writetree(args[1:]))
 
         case 'lstree':
             if len(args) != 2:
                 print("command requires one argument\nusage: lit lstree <hash>")
                 return
 
-            return lstree(args[1:])
+            print(*lstree(args[1:]))
 
         case other:
             print(f"unrecognized command {other}")
-            return
 
 def parseargs(args):
     flags = []
@@ -81,7 +80,7 @@ def decompfile(compressed):
     decompressed = zlib.decompress(compressed)
     header, content = decompressed.split(b'\x00', 1)
     type, size = header.decode().split(" ")
-    return type, size, content.decode()
+    return type, size, content
 
 def init():
     if os.path.exists(".lit"):
@@ -103,10 +102,7 @@ def init():
     with open(".lit/HEAD", "w") as file:
         file.write("ref: refs/heads/main\n")
 
-    print("initialized a repository")
-    print("current branch is named main") # TODO: make some way for users to switch branches
-    return "lit init"
-
+    return "initialized a repository\ncurrent branch is main"
 
 def catfile(args):
     recognizedflags = ["-p"]
@@ -116,7 +112,7 @@ def catfile(args):
         print("unrecognized flag\nusage: lit catfile [-p | <type>] <hash>")
         return
 
-    if len(args) <= 1:
+    if len(args) < 1:
         print("too little arguments\nusage: lit catfile [-p | <type>] <hash>")
         return
     elif 2 < len(args):
@@ -139,8 +135,7 @@ def catfile(args):
             try:
                 with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
                     conttype, size, content = decompfile(file.read())
-                    print(content.strip())
-                    return
+                    return content.decode().strip()
             except FileNotFoundError:
                 print(f"object {hash} not found")
                 return
@@ -152,8 +147,7 @@ def catfile(args):
                 if conttype != type:
                     print(f"object {hash} is not a blob")
                     return
-                print(content.strip())
-                return
+                return content.decode().strip()
         except FileNotFoundError:
             print(f"object {hash} not found")
             return
@@ -162,8 +156,7 @@ def catfile(args):
         try:
             with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
                 conttype, size, content = decompfile(file.read())
-                print(content.strip())
-                return
+                return content.strip()
         except FileNotFoundError:
             print(f"object {hash} not found")
             return
@@ -189,47 +182,46 @@ def hashobject(args):
     return hash
 
 def lstree(args):
-    # TODO: change print to return
     flags, args = parseargs(args)
 
-    hash = flags[0]
+    hash = args[0].strip()
+    res = []
 
-    if len(flags) != 40:
-        print("invalid hash\nusage: lit lstree <hash>")
-        return
+    if len(hash) != 40:
+        print(f"hash shoould be 40 characters long but input is {len(hash)} characters only\nusage: lit lstree <hash>")
+        return []
 
     try:
         with open(f".lit/objects/{hash[:2]}/{hash[2:]}", "rb") as file:
             type, size, content = decompfile(file.read())
             if type != "tree":
                 print(f"object {hash} is not a tree")
-
+                return []
+            
             if "--name-only" in flags:
-                idx = 0
-                while idx < len(content):
-                    nameend = content.find(b'\x00', idx)
-                    name = content[idx:nameend].decode()
+                while content:
+                    header, content = content.split(b"\x00", maxsplit=1)
+                    _, name = header.split(b' ')
+                    content = content[20:]
+                    res.append(name.decode())
 
-                    print(name)
-
-                    idx = nameend + 21
             else:
-                idx = 0
-                while idx < len(content):
-                    modeend = content.find(b' ', idx)
-                    mode = content[idx:modeend].decode()
+                while content:
+                    modeend = content.find(b" ")
+                    mode = content[:modeend]
+                    content = content[modeend+1:]
 
-                    nameend = content.find(b'\x00', modeend)
-                    name = content[modeend+1:nameend].decode()
+                    name, content = content.split(b"\x00", maxsplit=1)
+                    
+                    shahash = content[:40]
+                    content = content[40:]
 
-                    conthash = content[nameend+1:nameend+21].hex()
-
-                    print(f"{mode} {conthash} {name}")
-
-                    idx = nameend + 21
+                    print(f"mode: {mode.decode()}\nname: {name.decode()}\nhash: {shahash.hex()}")
+                    res.append(f"{mode.decode()} {name.decode()} {shahash.hex()}")
 
     except FileNotFoundError:
         print(f"tree {hash} not found")
+    # return res
 
 def writetree(args):
     flags, args = parseargs(args)
