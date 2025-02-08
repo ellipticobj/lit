@@ -4,6 +4,8 @@ import zlib
 import hashlib
 import shutil
 
+# TODO: make a better argument parser
+
 def main():
     args = sys.argv[1:]
 
@@ -37,11 +39,14 @@ def main():
             print(hashobject(args[1:]))
 
         case 'writetree':
+            if len(args) > 2:
+                print("too many arguments for command `lit writetree`")
+                return
             print(writetree(args[1:]))
 
         case 'lstree':
-            if len(args) != 2:
-                print("command requires one argument\nusage: lit lstree <hash>")
+            if len(args) > 3:
+                print("too many arguments\nusage: lit lstree <hash>")
                 return
 
             print(*lstree(args[1:]))
@@ -123,6 +128,10 @@ def catfile(args):
     type = args[0] if len(args) == 2 else None
     hash = args[-1] if len(args) == 2 else args[-1]
 
+    if type not in ["blob", "tree", "commit"]:
+        print(f"unrecognized type {type}\nusage: lit catfile [-p | <type>] <hash>")
+        return
+
     if len(hash) != 40:
         print(f"invalid hash {hash}\nusage: lit catfile [-p | <type>] <hash>")
         return
@@ -132,6 +141,7 @@ def catfile(args):
             print("too many arguments\nusage: lit catfile [-p | <type>] <hash>")
             return
         if '-p' in flags:
+            # TODO: add pretty print
             try:
                 with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
                     conttype, size, content = decompfile(file.read())
@@ -139,6 +149,9 @@ def catfile(args):
             except FileNotFoundError:
                 print(f"object {hash} not found")
                 return
+        else:
+            print("unrecognized flag\nusage: lit catfile [-p | <type>] <hash>")
+            return
 
     elif type:
         try:
@@ -156,7 +169,7 @@ def catfile(args):
         try:
             with open(f".lit/objects/{hash[0:2]}/{hash[2:]}", "rb") as file:
                 conttype, size, content = decompfile(file.read())
-                return content.strip()
+                return content.decode().strip()
         except FileNotFoundError:
             print(f"object {hash} not found")
             return
@@ -193,6 +206,7 @@ def lstree(args):
 
     try:
         with open(f".lit/objects/{hash[:2]}/{hash[2:]}", "rb") as file:
+            print(file.read())
             type, size, content = decompfile(file.read())
             content = content.decode()[2:-2]
             if type != "tree":
