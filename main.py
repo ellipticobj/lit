@@ -210,7 +210,8 @@ def lstree(args):
                     modeend = content.find(b" ")
                     mode = content[:modeend]
                     content = content[modeend+1:]
-
+                    
+                    #TODO: find some way to fix this
                     name, content = content.split(b"\x00", maxsplit=1)
                     
                     shahash = content[:40]
