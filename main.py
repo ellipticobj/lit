@@ -3,8 +3,16 @@ import os
 import zlib
 import hashlib
 import shutil
+from utils import hashfile, decompfile, parseargs
 
 # TODO: make a better argument parser
+
+# hints
+CATFILEHINT = "usage: lit catfile [-p | <type>] <hash>"
+INITHINT = "usage: lit init"
+HASHOBJECTHINT = "usage: lit hashobject [-w] <path>"
+LSTREEHINT = "usage: lit lstree [--name-only] <hash>"
+WRITETREEHINT = "usage: lit writetree"
 
 def main():
     args = sys.argv[1:]
@@ -16,43 +24,21 @@ def main():
     match args[0]:
         case 'init':
             if len(args) > 3:
-                print("too many arguments for command `lit init`")
+                print(f"too many arguments\n{INITHINT}")
                 return
 
             print(init())
 
         case 'catfile':
-            if len(args) < 3:
-                print("command requires two arguments\nusage: lit catfile <type> <hash>")
-                return
-
             print(catfile(args[1:]))
 
         case 'hashobject':
-            if len(args) < 2:
-                print("command requires one argument\nusage: lit hashobject <filename>")
-                return
-            elif len(args) > 3:
-                print("too many arguments for command `lit hashobject`")
-                return
-
             print(hashobject(args[1:]))
 
         case 'writetree':
-            if len(args) > 2:
-                print("too many arguments for command `lit writetree`")
-                return
             print(writetree(args[1:]))
 
         case 'lstree':
-            if len(args) < 2:
-                print("too little arguments\nusage: lit lstree <hash>")
-                return
-
-            if len(args) > 3:
-                print("too many arguments\nusage: lit lstree <hash>")
-                return
-
             res = lstree(args[1:])
 
             if not isinstance(res, list):
@@ -64,41 +50,6 @@ def main():
 
         case other:
             print(f"unrecognized command {other}")
-
-def parseargs(args):
-    flags = []
-    kwargs = []
-
-    for arg in args:
-        if arg.startswith('-'):
-            flags.append(arg)
-        else:
-            kwargs.append(arg)
-
-    return flags, kwargs
-
-def hashfile(path, filesize=None, write=False, type="blob"):
-    with open(path, "rb") as file:
-        content = file.read()
-        filesize = len(content) if not filesize else filesize
-        unhashed = f"{type} {str(filesize)}\x00".encode() + content
-
-    hash = hashlib.sha1(unhashed).hexdigest()
-
-    if write:
-        os.makedirs(f".lit/objects/{hash[:2]}", exist_ok=True)
-        with open(f".lit/objects/{hash[:2]}/{hash[2:]}", "wb") as file:
-            file.write(zlib.compress(unhashed))
-
-    return hash
-
-def decompfile(path):
-    with open(path, "rb") as file:
-        compressed = file.read()
-    decompressed = zlib.decompress(compressed)
-    header, content = decompressed.split(b'\x00', 1)
-    type, size = header.split(b" ")
-    return type, size, content
 
 def init():
     if os.path.exists(f"{os.getcwd()}/.lit"):
@@ -123,29 +74,32 @@ def init():
     return "initialized a repository\ncurrent branch is main"
 
 def catfile(args):
+    if len(args) < 2:
+        return f"command requires two arguments\n{CATFILEHINT}"
+
     recognizedflags = ["-p"]
     flags, args = parseargs(args)
 
     if not set(flags).issubset(recognizedflags):
-        return "unrecognized flag\nusage: lit catfile [-p | <type>] <hash>"
+        return f"unrecognized flag\n{CATFILEHINT}"
 
     if len(args) < 1:
-        return "too little arguments\nusage: lit catfile [-p | <type>] <hash>"
+        return f"too little arguments\n{CATFILEHINT}"
     elif 2 < len(args):
-        return "too many arguments\nusage: lit catfile [-p | <type>] <hash>"
+        return f"too many arguments\n{CATFILEHINT}"
 
     objtype = args[0] if len(args) == 3 else "blob"
     hash = args[-1] if len(args) == 2 else args[-1]
 
     if objtype not in ["blob", "tree", "commit"]:
-        return f"unrecognized type {objtype}\nusage: lit catfile [-p | <type>] <hash>"
+        return f"unrecognized type {objtype}\n{CATFILEHINT}"
 
     if len(hash) != 40:
-        return f"invalid hash {hash}\nusage: lit catfile [-p | <type>] <hash>"
+        return f"invalid hash {hash}\n{CATFILEHINT}"
 
     if flags:
         if len(args) != 1:
-            return "too many arguments\nusage: lit catfile [-p | <type>] <hash>"
+            return f"too many arguments\n{CATFILEHINT}"
 
         if '-p' in flags:
             # TODO: add pretty print
@@ -155,7 +109,7 @@ def catfile(args):
             except FileNotFoundError:
                 return f"object {hash} not found"
         else:
-            return "unrecognized flag\nusage: lit catfile [-p | <type>] <hash>"
+            return f"unrecognized flag\n{CATFILEHINT}"
 
     elif objtype:
         try:
@@ -174,6 +128,11 @@ def catfile(args):
             return f"object {hash} not found"
 
 def hashobject(args):
+    if len(args) < 1:
+        return f"command requires one argument\n{HASHOBJECTHINT}"
+    elif len(args) > 2:
+        return f"too many arguments\n{HASHOBJECTHINT}"
+
     flags, args = parseargs(args)
     type = 'blob'
     filename = args[0]
@@ -191,13 +150,19 @@ def hashobject(args):
     return hash
 
 def lstree(args):
+    if len(args) < 1:
+        return f"too little arguments\n{LSTREEHINT}"
+
+    if len(args) > 2:
+        return f"too many arguments\n{LSTREEHINT}"
+
     flags, args = parseargs(args)
 
     hash = args[0].strip()
     res = []
 
     if len(hash) != 40:
-        return f"hash shoould be 40 characters long but input is {len(hash)} characters only\nusage: lit lstree <hash>"
+        return f"hash shoould be 40 characters long but input is {len(hash)} characters only\n{LSTREEHINT}"
 
     try:
         type, size, content = decompfile(f"{os.getcwd()}/.lit/objects/{hash[:2]}/{hash[2:]}")
@@ -221,7 +186,6 @@ def lstree(args):
                 shahash = content[:40]
                 content = content[40:]
 
-                # print(f"mode: {mode}\nname: {name}\nhash: {shahash}")
                 res.append(f"{mode.decode()} {name.decode()} {shahash.hex()}")
 
     except FileNotFoundError:
@@ -229,6 +193,10 @@ def lstree(args):
     return res
 
 def writetree(args):
+    if len(args) > 1:
+        print("too many arguments\n{WRITETREEHINT}")
+        return
+
     flags, args = parseargs(args)
     path = f"{args[0]}" if args else "./"
 
@@ -242,7 +210,7 @@ def writetree(args):
     s = b""
 
     for item in contents:
-        if item in [".lit", ".git"]:
+        if item in [".lit"]:
             continue
 
         fullpath = os.path.join(path, item)
