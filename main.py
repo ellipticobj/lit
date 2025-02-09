@@ -5,7 +5,8 @@ import hashlib
 import shutil
 from utils import hashfile, decompfile, parseargs
 
-# TODO: make a better argument parser
+# TODO: make a better argument parser, dictionaries, maybe
+# TODO: handle hashobject on trees (isadirectoryerror)
 
 # hints
 CATFILEHINT = "usage: lit catfile [-p | <type>] <hash>"
